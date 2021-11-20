@@ -1,5 +1,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -84,47 +87,11 @@ int main()
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-
-        //-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        // 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        // 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        // 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        //-0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        //-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-        //-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        //-0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        //-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        //-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        //-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        //-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-        // 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        // 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        // 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        // 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        // 0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        // 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-        //-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        // 0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-        // 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        // 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        //-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        //-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-        //-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        // 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        // 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        // 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        //-0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        //-0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+        // positions          // colors           // texture coords
+         0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
+         0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
+        -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
     };
     // world space positions of our cubes
     glm::vec3 cubePositions[] = {
@@ -172,7 +139,8 @@ int main()
     // load image, create texture and generate mipmaps
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
-    unsigned char* data = stbi_load(/*FileSystem::getPath("resources/textures/container.jpg").c_str()*/"container.jpg", &width, &height, &nrChannels, 0);
+    // The FileSystem::getPath(...) is part of the GitHub repository so we can find files on any IDE/platform; replace it with your own image path.
+    unsigned char* data = stbi_load("resources/wall.jpg", &width, &height, &nrChannels, 0);
     if (data)
     {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
@@ -239,18 +207,8 @@ int main()
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, texture2);
 
-        // activate shader
+        // render container
         ourShader.use();
-
-        // pass projection matrix to shader (note that in this case it could change every frame)
-        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-        ourShader.setMat4("projection", projection);
-
-        // camera/view transformation
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-        ourShader.setMat4("view", view);
-
-        // render boxes
         glBindVertexArray(VAO);
         for (unsigned int i = 0; i < 10; i++)
         {
