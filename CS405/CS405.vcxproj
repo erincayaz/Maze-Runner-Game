@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shader_s.h" />
+    <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
