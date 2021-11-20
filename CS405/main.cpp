@@ -26,7 +26,22 @@ float Y2 = 0;
 
 void draw(unsigned frameCount, VAO &object1, VAO &object2, VAO &object3, VAO &object4)
 {
+    /*glm::vec4 vec(1.0f, 0.0f, 0.0f, 1.0f);
+    glm::mat4 trans = glm::mat4(1.0f);
+    trans = glm::translate(trans, glm::vec3(1.0f, 1.0f, 0.0f));
+    vec = trans * vec;
+    std::cout << vec.x << vec.y << vec.z << std::endl;
+    glm::mat4 trans = glm::mat4(1.0f);
+    trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0, 0.0, 1.0));
+    trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5));*/
+
+    glDrawElements(GL_TRIANGLES, object4.getIndicesCount(), GL_UNSIGNED_INT, NULL);
+
+
     glm::mat4 transform;
+
+
+
 
     // Draw object 1 at (-0.5, 0.5, 0)
     transform = glm::mat4(1.0f);
@@ -117,7 +132,7 @@ int main()
     VAO spikyDonut(positions, indices);
 
     // create shader
-    ShaderProgram sp("../shader/vertex.vert", "../shader/frag.frag");
+    ShaderProgram sp("vertex.vert", "frag.frag");
     u_transform = glGetUniformLocation(sp.id, "u_transform");
 
     sp.use();
