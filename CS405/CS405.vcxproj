@@ -27,11 +27,8 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Parametric3DShape.hpp" />
-    <ClInclude Include="ParametricLine.hpp" />
-    <ClInclude Include="ShaderProgram.hpp" />
-    <ClInclude Include="VAO.hpp" />
-    <ClInclude Include="Window.hpp" />
+    <ClInclude Include="shader_s.h" />
+    <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
