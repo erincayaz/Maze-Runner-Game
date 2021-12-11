@@ -36,8 +36,9 @@ float fov = 45.0f;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-int main()
-{
+GLFWwindow* startingFunctions();
+    
+GLFWwindow* startingFunctions() {
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
@@ -52,7 +53,7 @@ int main()
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return -1;
+        return window;
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -67,12 +68,18 @@ int main()
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
     }
 
     // configure global opengl state
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
+
+    return window;
+}
+
+int main()
+{
+    GLFWwindow* window = startingFunctions();
 
     // build and compile our shader zprogram
     // ------------------------------------
@@ -152,6 +159,9 @@ int main()
 
 
     unsigned int VBO1, VAO1, VAO2, VBO2;
+
+    //initializeV(&VAO1, &VBO1, vertices);
+
     glGenVertexArrays(1, &VAO1);
     glGenBuffers(1, &VBO1);
 
@@ -263,22 +273,22 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // pass projection matrix to shader (note that in this case it could change every frame)
+        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
         // Lighting
         lightingShader.use();
         lightingShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
         lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-
-        // pass projection matrix to shader (note that in this case it could change every frame)
-        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         lightingShader.setMat4("view", view);
         lightingShader.setMat4("projection", projection);
-
         glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(0.0, 1.0, 0.0));
         lightingShader.setMat4("model", model);
-
         glBindVertexArray(VAO1);
         glDrawArrays(GL_TRIANGLES, 0, 36);
+
 
         lightCubeShader.use();
         lightCubeShader.setMat4("projection", projection);
@@ -287,9 +297,9 @@ int main()
         model = glm::translate(model, lightPos);
         model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
         lightCubeShader.setMat4("model", model);
-
         glBindVertexArray(VAO1);
         glDrawArrays(GL_TRIANGLES, 0, 36);
+
 
         // bind textures on corresponding texture units
         glActiveTexture(GL_TEXTURE0);
