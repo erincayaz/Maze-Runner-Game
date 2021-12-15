@@ -30,6 +30,9 @@
     <ClCompile Include="game.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="newMain.cpp" />
+    <ClCompile Include="resourcemanager.cpp" />
+    <ClCompile Include="spriterenderer.cpp" />
+    <ClCompile Include="texture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="camera.h" />
@@ -37,8 +40,11 @@
     <ClInclude Include="game.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="model.h" />
+    <ClInclude Include="resourcemanager.h" />
     <ClInclude Include="shader_s.h" />
+    <ClInclude Include="spriterenderer.h" />
     <ClInclude Include="stb_image.h" />
+    <ClInclude Include="texture.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
