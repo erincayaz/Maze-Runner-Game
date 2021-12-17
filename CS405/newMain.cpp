@@ -11,6 +11,23 @@
 
 #include <iostream>
 
+struct gameObject {
+    glm::vec3 pos;
+    float size;
+
+    gameObject() {
+        pos = glm::vec3(0.0f);
+        size = 1.0;
+    }
+
+    gameObject(glm::vec3 p, int s = 1) {
+        pos = p;
+        size = s;
+    }
+};
+
+std::vector <gameObject> objects;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
