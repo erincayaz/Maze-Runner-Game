@@ -378,11 +378,12 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        for (unsigned int i = 0; i < 10; i++) {
+        //erinc collision
+        /*for (unsigned int i = 0; i < 10; i++) {
             if (camera.Position.y >= cubePositions[i].y) {
                 cubePositions[i].y += 1.0f;
             }
-        }
+        }*/
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -404,6 +405,54 @@ int main()
     return 0;
 }
 
+// Collision detection by looking at the direction camera wants to move and check if it collides with any object.
+//---------------------------------------------------------------------------------------------------------------
+bool checkCollision(std::vector <gameObject> objects, string direction, float distance) {
+    for (int i = 0; i < objects.size(); i++) {
+        if (direction == "front") {
+            if ((camera.Position + camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
+                (camera.Position + camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
+                (camera.Position + camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
+                (camera.Position + camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
+                (camera.Position + camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
+                (camera.Position + camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+                return true;
+            }
+        }
+        else if (direction == "back") {
+            if ((camera.Position - camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
+                (camera.Position - camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
+                (camera.Position - camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
+                (camera.Position - camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
+                (camera.Position - camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
+                (camera.Position - camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+                return true;
+            }
+        }
+        else if (direction == "left") {
+            if ((camera.Position - camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
+                (camera.Position - camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
+                (camera.Position - camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
+                (camera.Position - camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
+                (camera.Position - camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
+                (camera.Position - camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+                return true;
+            }
+        }
+        else if (direction == "right") {
+            if ((camera.Position + camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
+                (camera.Position + camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
+                (camera.Position + camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
+                (camera.Position + camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
+                (camera.Position + camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
+                (camera.Position + camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
@@ -411,15 +460,16 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS && !checkCollision(objects, "front", 0.25))
         camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS && !checkCollision(objects, "back", 0.25))
         camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS && !checkCollision(objects, "left", 0.25))
         camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
         camera.ProcessKeyboard(RIGHT, deltaTime);
 }
+
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
