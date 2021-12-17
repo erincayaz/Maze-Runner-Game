@@ -4,29 +4,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <vector>
 
+#include "shader_s.h"
 #include "camera.h"
 #include "entity.h"
 
 #include <iostream>
-
-struct gameObject {
-    glm::vec3 pos;
-    float size;
-
-    gameObject() {
-        pos = glm::vec3(0.0f);
-        size = 1.0;
-    }
-
-    gameObject(glm::vec3 p, int s = 1) {
-        pos = p;
-        size = s;
-    }
-};
-
-std::vector <gameObject> objects;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -234,16 +217,11 @@ int main()
     lightingShader.setInt("material.diffuse", 0);
     lightingShader.setInt("material.specular", 1);
 
-    for (int i = 0; i < 10; i++) {
-        gameObject temp(cubePositions[i]);
-        objects.push_back(temp);
-    }
 
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
-
         // per-frame time logic
         // --------------------
         float currentFrame = glfwGetTime();
