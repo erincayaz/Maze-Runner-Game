@@ -5,7 +5,6 @@
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <string>
 #include <fstream>
@@ -18,8 +17,6 @@ public:
     unsigned int ID;
     // constructor generates the shader on the fly
     // ------------------------------------------------------------------------
-    Shader( ) { }
-
     Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr)
     {
         // 1. retrieve the vertex/fragment source code from filePath
@@ -101,56 +98,12 @@ public:
             glDeleteShader(geometry);
 
     }
-
-    void Compile(const char* vertexSource, const char* fragmentSource, const char* geometrySource)
-    {
-        unsigned int sVertex, sFragment, gShader;
-        // vertex Shader
-        sVertex = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(sVertex, 1, &vertexSource, NULL);
-        glCompileShader(sVertex);
-        checkCompileErrors(sVertex, "VERTEX");
-        // fragment Shader
-        sFragment = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(sFragment, 1, &fragmentSource, NULL);
-        glCompileShader(sFragment);
-        checkCompileErrors(sFragment, "FRAGMENT");
-        // if geometry shader source code is given, also compile geometry shader
-        if (geometrySource != nullptr)
-        {
-            gShader = glCreateShader(GL_GEOMETRY_SHADER);
-            glShaderSource(gShader, 1, &geometrySource, NULL);
-            glCompileShader(gShader);
-            checkCompileErrors(gShader, "GEOMETRY");
-        }
-        // shader program
-        this->ID = glCreateProgram();
-        glAttachShader(this->ID, sVertex);
-        glAttachShader(this->ID, sFragment);
-        if (geometrySource != nullptr)
-            glAttachShader(this->ID, gShader);
-        glLinkProgram(this->ID);
-        checkCompileErrors(this->ID, "PROGRAM");
-        // delete the shaders as they're linked into our program now and no longer necessary
-        glDeleteShader(sVertex);
-        glDeleteShader(sFragment);
-        if (geometrySource != nullptr)
-            glDeleteShader(gShader);
-    }
-
     // activate the shader
     // ------------------------------------------------------------------------
     void use()
     {
         glUseProgram(ID);
     }
-
-    Shader& Use()
-    {
-        glUseProgram(this->ID);
-        return *this;
-    }
-
     // utility uniform functions
     // ------------------------------------------------------------------------
     void setBool(const std::string& name, bool value) const
@@ -208,24 +161,6 @@ public:
     void setMat4(const std::string& name, const glm::mat4& mat) const
     {
         glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
-    }
-    void SetMatrix4(const char* name, const glm::mat4& matrix, bool useShader)
-    {
-        if (useShader)
-            this->Use();
-        glUniformMatrix4fv(glGetUniformLocation(this->ID, name), 1, false, glm::value_ptr(matrix));
-    }
-    void SetVector3f(const char* name, float x, float y, float z, bool useShader)
-    {
-        if (useShader)
-            this->Use();
-        glUniform3f(glGetUniformLocation(this->ID, name), x, y, z);
-    }
-    void SetVector3f(const char* name, const glm::vec3& value, bool useShader)
-    {
-        if (useShader)
-            this->Use();
-        glUniform3f(glGetUniformLocation(this->ID, name), value.x, value.y, value.z);
     }
 
 private:
