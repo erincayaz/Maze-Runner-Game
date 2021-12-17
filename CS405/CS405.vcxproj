@@ -100,17 +100,17 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\atabe\source\repos\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\atabe\source\repos\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\atabe\source\repos\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
     <ExternalIncludePath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\lib;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\atabe\source\repos\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -121,7 +121,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\atabe\Desktop\Okul\glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\erinc\Desktop\Her Şey\glm</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\atabe\Desktop\Okul\glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\erinc\Desktop\Her Şey\glm</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

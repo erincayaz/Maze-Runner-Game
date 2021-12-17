@@ -13,16 +13,25 @@
 
 struct gameObject {
     glm::vec3 pos;
-    float size;
+    glm::vec3 size;
+    float rotation;
+    glm::vec3 rotAxis;
+    string texture;
 
     gameObject() {
         pos = glm::vec3(0.0f);
-        size = 1.0;
+        size = glm::vec3(1.0f);
+        rotation = 0.0f;
+        rotAxis = glm::vec3(0.0f);
+        texture = "ground";
     }
 
-    gameObject(glm::vec3 p, int s = 1) {
+    gameObject(glm::vec3 p, float r = 0.0f, glm::vec3 ra = glm::vec3(0.0f, 0.0f, 0.0f), string t = "ground", glm::vec3 s = glm::vec3(1.0f, 1.0f, 1.0f)) {
         pos = p;
         size = s;
+        rotation = r;
+        rotAxis = ra;
+        texture = t;
     }
 };
 
@@ -33,6 +42,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
+void computeMap();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -159,23 +169,16 @@ int main()
 
     // positions all containers
     glm::vec3 cubePositions[] = {
-        glm::vec3(0.0f,  0.0f,  0.0f),
-        glm::vec3(2.0f,  5.0f, -15.0f),
-        glm::vec3(-1.5f, -2.2f, -2.5f),
-        glm::vec3(-3.8f, -2.0f, -12.3f),
-        glm::vec3(2.4f, -0.4f, -3.5f),
-        glm::vec3(-1.7f,  3.0f, -7.5f),
-        glm::vec3(1.3f, -2.0f, -2.5f),
-        glm::vec3(1.5f,  2.0f, -2.5f),
-        glm::vec3(1.5f,  0.2f, -1.5f),
-        glm::vec3(-1.3f,  1.0f, -1.5f)
+        glm::vec3(0.0f,  0.0f,  0.0f)
     };
+
+    computeMap();
 
     glm::vec3 pointLightPositions[] = {
         glm::vec3(0.7f,  0.2f,  2.0f),
         glm::vec3(2.3f, -3.3f, -4.0f),
         glm::vec3(-4.0f,  2.0f, -12.0f),
-        glm::vec3(0.0f,  0.0f, -3.0f)
+        glm::vec3(0.0f,  5.0f, -3.0f)
     };
 
     // first, configure the cube's VAO (and VBO)
@@ -233,11 +236,6 @@ int main()
     lightingShader.use();
     lightingShader.setInt("material.diffuse", 0);
     lightingShader.setInt("material.specular", 1);
-
-    for (int i = 0; i < 10; i++) {
-        gameObject temp(cubePositions[i]);
-        objects.push_back(temp);
-    }
 
     // render loop
     // -----------
@@ -324,8 +322,8 @@ int main()
         lightingShader.setMat4("model", model);
 
         model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f));	// it's a bit too big for our scene, so scale it down
+        model = glm::translate(model, glm::vec3(0.0f, 10.0f, 0.0f)); // translate it down so it's at the center of the scene
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));	// it's a bit too big for our scene, so scale it down
         lightingShader.setMat4("model", model);
         ourModel.Draw(lightingShader);
 
@@ -338,30 +336,40 @@ int main()
 
         // render containers
         glBindVertexArray(cubeVAO);
-        for (unsigned int i = 0; i < 10; i++)
+        for (unsigned int i = 0; i < 1; i++)
         {
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, cubePositions[i]);
-            float angle = 20.0f * i;
-            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            model = glm::translate(model, glm::vec3(0.0f, -10.0f, 0.0f));
             lightingShader.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // bind diffuse map
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, diffuseMapGround);
-        // bind specular map
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, specularMapGround);
 
         glBindVertexArray(planeVAO);
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, -5.0f, 0.0f));
-        lightingShader.setMat4("model", model);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        for (unsigned int i = 0; i < objects.size(); i++) {
+            if (objects[i].texture == "ground") {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, diffuseMapGround);
+                // bind specular map
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, specularMapGround);
+            }
+            else if (objects[i].texture == "wall") {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, diffuseMap);
+                // bind specular map
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, specularMap);
+            }
+
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, objects[i].pos);
+            model = glm::rotate(model, glm::radians(objects[i].rotation), objects[i].rotAxis);
+            lightingShader.setMat4("model", model);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
 
         lightCubeShader.use();
         lightCubeShader.setMat4("projection", projection);
@@ -410,47 +418,86 @@ int main()
 bool checkCollision(std::vector <gameObject> objects, string direction, float distance) {
     for (int i = 0; i < objects.size(); i++) {
         if (direction == "front") {
-            if ((camera.Position + camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position + camera.Front * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Front * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Front * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Front * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Front * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Front * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "back") {
-            if ((camera.Position - camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position - camera.Front * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Front * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Front * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Front * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Front * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Front * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "left") {
-            if ((camera.Position - camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position - camera.Right * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Right * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Right * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Right * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Right * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Right * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "right") {
-            if ((camera.Position + camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position + camera.Right * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Right * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Right * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Right * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Right * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Right * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
     }
     return false;
+}
+
+void computeMap() {
+    for (int i = 0; i < 20; i++) {
+        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+
+    gameObject temp(glm::vec3(0.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(0.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -468,6 +515,10 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
         camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        camera.ProcessKeyboard(UP, deltaTime);
+    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        camera.ProcessKeyboard(DOWN, deltaTime);
 }
 
 
