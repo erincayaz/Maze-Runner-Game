@@ -464,7 +464,22 @@ bool checkCollision(std::vector <gameObject> objects, string direction, float di
 }
 
 void computeMap() {
-    for (int i = 0; i < 20; i++) {
+    gameObject temp(glm::vec3(0.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(0.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    int i;
+    for (i = 0; i < 20; i++) {
         gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
         objects.push_back(temp);
 
@@ -486,20 +501,72 @@ void computeMap() {
         temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
         objects.push_back(temp);
     }
+    
+    // Left Turn
+    for (int j = 0; j < 3; j++) {
 
-    gameObject temp(glm::vec3(0.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        i++;
+    }
+
+    temp = *new gameObject(glm::vec3(0.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
     objects.push_back(temp);
 
-    temp = *new gameObject(glm::vec3(0.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    temp = *new gameObject(glm::vec3(1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
     objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+
+    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
     objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+
+    temp = *new gameObject(glm::vec3(0.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
     objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    int x;
+    for (x = 0; x < 20; x++) {
+        gameObject temp(glm::vec3(2.0f + x, -1.0f, 0.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, 1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, -1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+
+    
+    
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
