@@ -43,6 +43,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
 void computeMap();
+void gravity();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -251,6 +252,7 @@ int main()
         // input
         // -----
         processInput(window);
+        gravity();
 
         // render
         // ------
@@ -519,6 +521,11 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(UP, deltaTime);
     if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
         camera.ProcessKeyboard(DOWN, deltaTime);
+}
+
+void gravity() {
+    if(!checkCollision(objects, "front", 0.25))
+        camera.Position -= glm::vec3(0.0f, 1.0f, 0.0f) * deltaTime;
 }
 
 
