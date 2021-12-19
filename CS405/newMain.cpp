@@ -459,8 +459,49 @@ bool checkCollision(std::vector <gameObject> objects, string direction, float di
                 return true;
             }
         }
+        else if (direction == "up") {
+            if ((camera.Position + camera.Up * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Up * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Up * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Up * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Up * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Up * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
+                return true;
+            }
+        }
+        else if (direction == "down") {
+            if ((camera.Position - camera.Up * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Up * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Up * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Up * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Up * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Up * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
+                return true;
+            }
+        }
     }
     return false;
+}
+
+// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
+// ---------------------------------------------------------------------------------------------------------
+void processInput(GLFWwindow* window)
+{
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS && !checkCollision(objects, "front", 0.25))
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS && !checkCollision(objects, "back", 0.25))
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS && !checkCollision(objects, "left", 0.25))
+        camera.ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+        camera.ProcessKeyboard(UP, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !checkCollision(objects, "down", 1))
+        camera.ProcessKeyboard(DOWN, deltaTime);
 }
 
 void computeMap() {
@@ -569,29 +610,8 @@ void computeMap() {
     
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow* window)
-{
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS && !checkCollision(objects, "front", 0.25))
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS && !checkCollision(objects, "back", 0.25))
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS && !checkCollision(objects, "left", 0.25))
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
-        camera.ProcessKeyboard(RIGHT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        camera.ProcessKeyboard(UP, deltaTime);
-    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-        camera.ProcessKeyboard(DOWN, deltaTime);
-}
-
 void gravity() {
-    if(!checkCollision(objects, "front", 0.25))
+    if(!checkCollision(objects, "front", 1) && !checkCollision(objects, "back", 1) && !checkCollision(objects, "down", 1))
         camera.Position -= glm::vec3(0.0f, 1.0f, 0.0f) * deltaTime;
 }
 
