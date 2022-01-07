@@ -45,6 +45,7 @@ unsigned int loadTexture(const char* path);
 void computeMap();
 void compMap();
 void gravity();
+bool frustumCulling(glm::vec3 objPos, float size);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -396,7 +397,10 @@ int main()
             model = glm::translate(model, objects[i].pos);
             model = glm::rotate(model, glm::radians(objects[i].rotation), objects[i].rotAxis);
             lightingShader.setMat4("model", model);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            if (frustumCulling(objects[i].pos, objects[i].size.x)) {
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+            
         }
 
         lightCubeShader.use();
@@ -439,6 +443,57 @@ int main()
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
+}
+
+// area calculation of a triangle
+float area(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+    return abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
+}
+
+/* A function to check whether point P(x, y) lies inside the triangle formed
+   by A(x1, y1), B(x2, y2) and C(x3, y3) */
+bool isInside(int x1, int y1, int x2, int y2, int x3, int y3, int x, int y)
+{
+    /* Calculate area of triangle ABC */
+    float A = area(x1, y1, x2, y2, x3, y3);
+
+    /* Calculate area of triangle PBC */
+    float A1 = area(x, y, x2, y2, x3, y3);
+
+    /* Calculate area of triangle PAC */
+    float A2 = area(x1, y1, x, y, x3, y3);
+
+    /* Calculate area of triangle PAB */
+    float A3 = area(x1, y1, x2, y2, x, y);
+
+    /* Check if sum of A1, A2 and A3 is same as A */
+    return (A == A1 + A2 + A3);
+}
+
+// Frustum colling by looking forward the camera and checking the distances of objects to camera.
+//-----------------------------------------------------------------------------------------------
+
+bool frustumCulling(glm::vec3 objPos, float size) {
+    /*printf(std::to_string(camera.Front.x) + "y: " + std::to_string(camera.Front.y) + "z: " + std::to_string(camera.Front.z));*/
+
+    float left_right_distance = 40.0f;
+    float front_distance = 50.0f;
+
+    glm::vec3 frustumPlanePos = camera.Position + camera.Front * front_distance;
+
+    glm::vec3 point1Pos = frustumPlanePos - camera.Right * left_right_distance;
+    glm::vec3 point2Pos = frustumPlanePos + camera.Right * left_right_distance;
+
+    if (isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x, objPos.z) || 
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z + size) || 
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z - size) || 
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z - size) || 
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z + size)) {
+        return true;
+    }
+
+    return false;
 }
 
 // Collision detection by looking at the direction camera wants to move and check if it collides with any object.
