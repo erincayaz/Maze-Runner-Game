@@ -135,9 +135,7 @@ public:
     /** Extract a particular vertex from a anim mesh and interleave all components */
     explicit Vertex(const aiAnimMesh* msh, unsigned int idx) {
         ai_assert(idx < msh->mNumVertices);
-        if (msh->HasPositions()) {
-            position = msh->mVertices[idx];
-        }
+        position = msh->mVertices[idx];
 
         if (msh->HasNormals()) {
             normal = msh->mNormals[idx];

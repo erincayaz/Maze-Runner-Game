@@ -29,6 +29,8 @@
     <None Include="light_cube.frag">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="text.frag" />
+    <None Include="text.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c">
