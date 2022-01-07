@@ -37,6 +37,7 @@ struct gameObject {
 
 std::vector <gameObject> objects;
 std::vector <glm::vec3> lightPos;
+glm::vec3 spiderPos;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -47,13 +48,14 @@ void computeMap();
 void compMap();
 void gravity();
 bool checkFinish();
+void calculatePosOfSpider();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(2.0f, 2.0f, 2.0f));
+Camera camera(glm::vec3(2.0f, 10.0f, 2.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -132,6 +134,7 @@ int main()
 
     // Load Shader
     Model ourModel("backpack.obj");
+    Model spiderModel("scene.gltf");
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -203,6 +206,11 @@ int main()
     //computeMap();
     /*****************/
 
+    // Cube Pos
+    glm::vec3 cubePos = glm::vec3(0.0f, -10.0f, -2.0f);
+    spiderPos = glm::vec3(3.0f, -0.3f, 3.0f);
+    /////////
+
     glm::vec3 pointLightPositions[] = {
         glm::vec3(0.7f,  0.2f,  2.0f),
         glm::vec3(2.3f, -3.3f, -4.0f),
@@ -270,6 +278,8 @@ int main()
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+
+        // Debug
 
         // per-frame time logic
         // --------------------
@@ -357,6 +367,16 @@ int main()
         lightingShader.setMat4("model", model);
         ourModel.Draw(lightingShader);
 
+        // render spider
+        calculatePosOfSpider();
+
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, spiderPos);
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+        model = glm::rotate(model, glm::radians(270.0f), glm::vec3(1.0f, 0, 0));
+        lightingShader.setMat4("model", model);
+        spiderModel.Draw(lightingShader);
+
         // bind diffuse map
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, diffuseMap);
@@ -368,9 +388,12 @@ int main()
         glBindVertexArray(cubeVAO);
         for (unsigned int i = 0; i < 1; i++)
         {
+            float velocity = 1.0f * deltaTime;
+
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -10.0f, 0.0f));
+
+            model = glm::translate(model, cubePos);
             lightingShader.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -443,6 +466,23 @@ int main()
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
+}
+
+void calculatePosOfSpider() {
+    float velocity = 2.0f * deltaTime;
+    if (camera.Position.x > spiderPos.x) {
+        spiderPos += glm::vec3(1.0f, 0, 0) * velocity;
+    }
+    else {
+        spiderPos -= glm::vec3(1.0f, 0, 0) * velocity;
+    }
+
+    if (camera.Position.z > spiderPos.z) {
+        spiderPos += glm::vec3(0, 0, 1.0f) * velocity;
+    }
+    else {
+        spiderPos -= glm::vec3(0, 0, 1.0f) * velocity;
+    }
 }
 
 // Collision detection by looking at the direction camera wants to move and check if it collides with any object.
@@ -818,6 +858,7 @@ void Visit(int x, int y)
         }
     }
 }
+
 void PrintGrid()
 {
     // Displays the finished maze to the screen.
@@ -829,5 +870,10 @@ void PrintGrid()
         }
         cout << endl;
     }
+}
+
+void astar(int x, int y, vector <vector <int>> ind, vector <char> path) {
+    
+
 }
 
