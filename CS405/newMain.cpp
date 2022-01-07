@@ -13,16 +13,25 @@
 
 struct gameObject {
     glm::vec3 pos;
-    float size;
+    glm::vec3 size;
+    float rotation;
+    glm::vec3 rotAxis;
+    string texture;
 
     gameObject() {
         pos = glm::vec3(0.0f);
-        size = 1.0;
+        size = glm::vec3(1.0f);
+        rotation = 0.0f;
+        rotAxis = glm::vec3(0.0f);
+        texture = "ground";
     }
 
-    gameObject(glm::vec3 p, int s = 1) {
+    gameObject(glm::vec3 p, float r = 0.0f, glm::vec3 ra = glm::vec3(0.0f, 0.0f, 0.0f), string t = "ground", glm::vec3 s = glm::vec3(1.0f, 1.0f, 1.0f)) {
         pos = p;
         size = s;
+        rotation = r;
+        rotAxis = ra;
+        texture = t;
     }
 };
 
@@ -33,13 +42,16 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
+void computeMap();
+void compMap();
+void gravity();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(2.0f, 2.0f, 2.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -47,6 +59,24 @@ bool firstMouse = true;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// Maze
+//----CONSTANTS-------------------------------------------------------
+#define GRID_WIDTH 30
+#define GRID_HEIGHT 15
+#define NORTH 0
+#define EAST 1
+#define SOUTH 2
+#define WEST 3
+//----GLOBAL VARIABLES------------------------------------------------
+char grid[GRID_WIDTH * GRID_HEIGHT];
+//----FUNCTION PROTOTYPES---------------------------------------------
+void ResetGrid();
+int XYToIndex(int x, int y);
+int IsInBounds(int x, int y);
+void Visit(int x, int y);
+void PrintGrid();
+/////////////////////////////////////////////////////////////////////
 
 int main()
 {
@@ -159,23 +189,23 @@ int main()
 
     // positions all containers
     glm::vec3 cubePositions[] = {
-        glm::vec3(0.0f,  0.0f,  0.0f),
-        glm::vec3(2.0f,  5.0f, -15.0f),
-        glm::vec3(-1.5f, -2.2f, -2.5f),
-        glm::vec3(-3.8f, -2.0f, -12.3f),
-        glm::vec3(2.4f, -0.4f, -3.5f),
-        glm::vec3(-1.7f,  3.0f, -7.5f),
-        glm::vec3(1.3f, -2.0f, -2.5f),
-        glm::vec3(1.5f,  2.0f, -2.5f),
-        glm::vec3(1.5f,  0.2f, -1.5f),
-        glm::vec3(-1.3f,  1.0f, -1.5f)
+        glm::vec3(0.0f,  0.0f,  0.0f)
     };
+
+    // Maze Generation
+    srand(time(0));
+    ResetGrid();
+    Visit(1, 1);
+    compMap();
+    PrintGrid();
+    //computeMap();
+    /*****************/
 
     glm::vec3 pointLightPositions[] = {
         glm::vec3(0.7f,  0.2f,  2.0f),
         glm::vec3(2.3f, -3.3f, -4.0f),
         glm::vec3(-4.0f,  2.0f, -12.0f),
-        glm::vec3(0.0f,  0.0f, -3.0f)
+        glm::vec3(0.0f,  5.0f, -3.0f)
     };
 
     // first, configure the cube's VAO (and VBO)
@@ -234,11 +264,6 @@ int main()
     lightingShader.setInt("material.diffuse", 0);
     lightingShader.setInt("material.specular", 1);
 
-    for (int i = 0; i < 10; i++) {
-        gameObject temp(cubePositions[i]);
-        objects.push_back(temp);
-    }
-
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -253,6 +278,7 @@ int main()
         // input
         // -----
         processInput(window);
+        gravity();
 
         // render
         // ------
@@ -324,8 +350,8 @@ int main()
         lightingShader.setMat4("model", model);
 
         model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f));	// it's a bit too big for our scene, so scale it down
+        model = glm::translate(model, glm::vec3(0.0f, 10.0f, 0.0f)); // translate it down so it's at the center of the scene
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));	// it's a bit too big for our scene, so scale it down
         lightingShader.setMat4("model", model);
         ourModel.Draw(lightingShader);
 
@@ -338,30 +364,40 @@ int main()
 
         // render containers
         glBindVertexArray(cubeVAO);
-        for (unsigned int i = 0; i < 10; i++)
+        for (unsigned int i = 0; i < 1; i++)
         {
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, cubePositions[i]);
-            float angle = 20.0f * i;
-            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            model = glm::translate(model, glm::vec3(0.0f, -10.0f, 0.0f));
             lightingShader.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // bind diffuse map
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, diffuseMapGround);
-        // bind specular map
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, specularMapGround);
 
         glBindVertexArray(planeVAO);
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, -5.0f, 0.0f));
-        lightingShader.setMat4("model", model);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        for (unsigned int i = 0; i < objects.size(); i++) {
+            if (objects[i].texture == "ground") {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, diffuseMapGround);
+                // bind specular map
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, specularMapGround);
+            }
+            else if (objects[i].texture == "wall") {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, diffuseMap);
+                // bind specular map
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, specularMap);
+            }
+
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, objects[i].pos);
+            model = glm::rotate(model, glm::radians(objects[i].rotation), objects[i].rotAxis);
+            lightingShader.setMat4("model", model);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
 
         lightCubeShader.use();
         lightCubeShader.setMat4("projection", projection);
@@ -410,42 +446,62 @@ int main()
 bool checkCollision(std::vector <gameObject> objects, string direction, float distance) {
     for (int i = 0; i < objects.size(); i++) {
         if (direction == "front") {
-            if ((camera.Position + camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position + camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position + camera.Front * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Front * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Front * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Front * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Front * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Front * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "back") {
-            if ((camera.Position - camera.Front * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position - camera.Front * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position - camera.Front * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Front * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Front * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Front * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Front * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Front * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "left") {
-            if ((camera.Position - camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position - camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position - camera.Right * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Right * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Right * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Right * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Right * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Right * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
         else if (direction == "right") {
-            if ((camera.Position + camera.Right * distance).x > objects[i].pos.x - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).x < objects[i].pos.x + objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).y > objects[i].pos.y - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).y < objects[i].pos.y + objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).z > objects[i].pos.z - objects[i].size / 2 &&
-                (camera.Position + camera.Right * distance).z < objects[i].pos.z + objects[i].size / 2) {
+            if ((camera.Position + camera.Right * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Right * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Right * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Right * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Right * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Right * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
+                return true;
+            }
+        }
+        else if (direction == "up") {
+            if ((camera.Position + camera.Up * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position + camera.Up * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position + camera.Up * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position + camera.Up * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position + camera.Up * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position + camera.Up * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
+                return true;
+            }
+        }
+        else if (direction == "down") {
+            if ((camera.Position - camera.Up * distance).x > objects[i].pos.x - objects[i].size.x / 2 &&
+                (camera.Position - camera.Up * distance).x < objects[i].pos.x + objects[i].size.x / 2 &&
+                (camera.Position - camera.Up * distance).y > objects[i].pos.y - objects[i].size.y / 2 &&
+                (camera.Position - camera.Up * distance).y < objects[i].pos.y + objects[i].size.y / 2 &&
+                (camera.Position - camera.Up * distance).z > objects[i].pos.z - objects[i].size.z / 2 &&
+                (camera.Position - camera.Up * distance).z < objects[i].pos.z + objects[i].size.z / 2) {
                 return true;
             }
         }
@@ -468,6 +524,309 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
         camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+        camera.ProcessKeyboard(UP, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !checkCollision(objects, "down", 1))
+        camera.ProcessKeyboard(DOWN, deltaTime);
+}
+
+void compMap() {
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            if (grid[XYToIndex(x, y)] == ' ') {
+                gameObject temp(glm::vec3(x * 3, -1, y * 3), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 - 1, -1, y * 3), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 + 1, -1, y * 3), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3, -1, y * 3 - 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 - 1, -1, y * 3 - 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 + 1, -1, y * 3 - 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3, -1, y * 3 + 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 - 1, -1, y * 3 + 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                temp = *new gameObject(glm::vec3(x * 3 + 1, -1, y * 3 + 1), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+                objects.push_back(temp);
+
+                // walls
+
+                if (grid[XYToIndex(x, y + 1)] != ' ') {
+                    gameObject temp(glm::vec3(x * 3, 0, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 1, 0, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 1, 0, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3, 1, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 1, 1, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 1, 1, y * 3 + 2), 0, glm::vec3(0.0f, 0.0f, 1.0f), "wall");
+                    objects.push_back(temp);
+                }
+                if (grid[XYToIndex(x, y - 1)] != ' ') {
+                    gameObject temp(glm::vec3(x * 3, 0, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 1, 0, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 1, 0, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3, 1, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 1, 1, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 1, 1, y * 3 - 2), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+                }
+                if (grid[XYToIndex(x + 1, y)] != ' ') {
+                    gameObject temp(glm::vec3(x * 3 + 2, 0, y * 3), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 2, 0, y * 3 + 1), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 2, 0, y * 3 - 1), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 2, 1, y * 3), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 2, 1, y * 3 + 1), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 + 2, 1, y * 3 - 1), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+                }
+                if (grid[XYToIndex(x - 1, y)] != ' ') {
+                    gameObject temp(glm::vec3(x * 3 - 2, 0, y * 3), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 2, 0, y * 3 + 1), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 2, 0, y * 3 - 1), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 2, 1, y * 3), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 2, 1, y * 3 + 1), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+
+                    temp = *new gameObject(glm::vec3(x * 3 - 2, 1, y * 3 - 1), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+                    objects.push_back(temp);
+                }
+                
+            }
+        }
+    }
+}
+
+void computeMap() {
+    gameObject temp(glm::vec3(0.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(0.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    int i;
+    for (i = 0; i < 20; i++) {
+        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+    
+    // Left Turn
+    for (int j = 0; j < 3; j++) {
+
+        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        i++;
+    }
+
+    temp = *new gameObject(glm::vec3(0.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(0.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    int x;
+    for (x = 0; x < 20; x++) {
+        gameObject temp(glm::vec3(2.0f + x, -1.0f, 0.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, 1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, -1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+
+    for (; x < 23; x++) {
+        gameObject temp(glm::vec3(2.0f + x, -1.0f, 0.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, 1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, -1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+    }
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 1.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 2.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 3.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 1.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 2.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 3.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+    objects.push_back(temp);
+
+    for (; i < 40; i++) {
+        gameObject temp(glm::vec3(x + 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x + 2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x + 2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+
+    for (i = 0; i < 20; i++) {
+        gameObject temp(glm::vec3(x + 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x + 2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x + 2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+
+        temp = *new gameObject(glm::vec3(x - 2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
+        objects.push_back(temp);
+    }
+    
+}
+
+void gravity() {
+    if(!checkCollision(objects, "front", 1) && !checkCollision(objects, "back", 1) && !checkCollision(objects, "down", 1))
+        camera.Position -= glm::vec3(0.0f, 1.0f, 0.0f) * deltaTime;
 }
 
 
@@ -544,4 +903,88 @@ unsigned int loadTexture(char const* path)
     }
 
     return textureID;
+}
+
+void ResetGrid()
+{
+    // Fills the grid with walls ('#' characters).
+    for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; ++i)
+    {
+        grid[i] = '#';
+    }
+}
+int XYToIndex(int x, int y)
+{
+    // Converts the two-dimensional index pair (x,y) into a
+    // single-dimensional index. The result is y * ROW_WIDTH + x.
+    return y * GRID_WIDTH + x;
+}
+int IsInBounds(int x, int y)
+{
+    // Returns "true" if x and y are both in-bounds.
+    if (x < 0 || x >= GRID_WIDTH) return false;
+    if (y < 0 || y >= GRID_HEIGHT) return false;
+    return true;
+}
+// This is the recursive function we will code in the next project
+void Visit(int x, int y)
+{
+    // Starting at the given index, recursively visits every direction in a
+    // randomized order.
+    // Set my current location to be an empty passage.
+    grid[XYToIndex(x, y)] = ' ';
+    // Create an local array containing the 4 directions and shuffle their order.
+    int dirs[4];
+    dirs[0] = NORTH;
+    dirs[1] = EAST;
+    dirs[2] = SOUTH;
+    dirs[3] = WEST;
+    for (int i = 0; i < 4; ++i)
+    {
+        int r = rand() & 3;
+        int temp = dirs[r];
+        dirs[r] = dirs[i];
+        dirs[i] = temp;
+    }
+    // Loop through every direction and attempt to Visit that direction.
+    for (int i = 0; i < 4; ++i)
+    {
+        // dx,dy are offsets from current location. Set them based
+        // on the next direction I wish to try.
+        int dx = 0, dy = 0;
+        switch (dirs[i])
+        {
+        case NORTH: dy = -1; break;
+        case SOUTH: dy = 1; break;
+        case EAST: dx = 1; break;
+        case WEST: dx = -1; break;
+        }
+        // Find the (x,y) coordinates of the grid cell 2 spots
+        // away in the given direction.
+        int x2 = x + (dx << 1);
+        int y2 = y + (dy << 1);
+        if (IsInBounds(x2, y2))
+        {
+            if (grid[XYToIndex(x2, y2)] == '#')
+            {
+                // (x2,y2) has not been visited yet... knock down the
+                // wall between my current position and that position
+                grid[XYToIndex(x2 - dx, y2 - dy)] = ' ';
+                // Recursively Visit (x2,y2)
+                Visit(x2, y2);
+            }
+        }
+    }
+}
+void PrintGrid()
+{
+    // Displays the finished maze to the screen.
+    for (int y = 0; y < GRID_HEIGHT; ++y)
+    {
+        for (int x = 0; x < GRID_WIDTH; ++x)
+        {
+            cout << grid[XYToIndex(x, y)];
+        }
+        cout << endl;
+    }
 }
