@@ -36,6 +36,8 @@ struct gameObject {
 };
 
 std::vector <gameObject> objects;
+std::vector <glm::vec3> lightPos;
+glm::vec3 spiderPos;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -45,14 +47,18 @@ unsigned int loadTexture(const char* path);
 void computeMap();
 void compMap();
 void gravity();
+
 bool frustumCulling(glm::vec3 objPos, float size);
+
+bool checkFinish();
+void calculatePosOfSpider();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(2.0f, 2.0f, 2.0f));
+Camera camera(glm::vec3(2.0f, 10.0f, 2.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -131,6 +137,7 @@ int main()
 
     // Load Shader
     Model ourModel("backpack.obj");
+    Model spiderModel("scene.gltf");
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -202,6 +209,11 @@ int main()
     //computeMap();
     /*****************/
 
+    // Cube Pos
+    glm::vec3 cubePos = glm::vec3(0.0f, -10.0f, -2.0f);
+    spiderPos = glm::vec3(3.0f, -0.3f, 3.0f);
+    /////////
+
     glm::vec3 pointLightPositions[] = {
         glm::vec3(0.7f,  0.2f,  2.0f),
         glm::vec3(2.3f, -3.3f, -4.0f),
@@ -269,6 +281,8 @@ int main()
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+
+        // Debug
 
         // per-frame time logic
         // --------------------
@@ -356,6 +370,16 @@ int main()
         lightingShader.setMat4("model", model);
         ourModel.Draw(lightingShader);
 
+        // render spider
+        calculatePosOfSpider();
+
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, spiderPos);
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+        model = glm::rotate(model, glm::radians(270.0f), glm::vec3(1.0f, 0, 0));
+        lightingShader.setMat4("model", model);
+        spiderModel.Draw(lightingShader);
+
         // bind diffuse map
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, diffuseMap);
@@ -367,9 +391,12 @@ int main()
         glBindVertexArray(cubeVAO);
         for (unsigned int i = 0; i < 1; i++)
         {
+            float velocity = 1.0f * deltaTime;
+
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -10.0f, 0.0f));
+
+            model = glm::translate(model, cubePos);
             lightingShader.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -409,21 +436,23 @@ int main()
 
         // we now draw as many light bulbs as we have point lights.
         glBindVertexArray(lightCubeVAO);
-        for (unsigned int i = 0; i < 4; i++)
+        for (unsigned int i = 0; i < lightPos.size(); i++)
         {
             model = glm::mat4(1.0f);
-            model = glm::translate(model, pointLightPositions[i]);
+            model = glm::translate(model, lightPos[i]);
             model = glm::scale(model, glm::vec3(0.2f)); // Make it a smaller cube
             lightCubeShader.setMat4("model", model);
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        //erinc collision
-        /*for (unsigned int i = 0; i < 10; i++) {
-            if (camera.Position.y >= cubePositions[i].y) {
-                cubePositions[i].y += 1.0f;
-            }
-        }*/
+        if (checkFinish()) {
+            camera.Position = glm::vec3(2.0f, 20.0f, 2.0f);
+            ResetGrid();
+            Visit(1, 1);
+            objects.clear();
+            lightPos.clear();
+            compMap();
+        }
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -494,6 +523,23 @@ bool frustumCulling(glm::vec3 objPos, float size) {
     }
 
     return false;
+
+void calculatePosOfSpider() {
+    float velocity = 2.0f * deltaTime;
+    if (camera.Position.x > spiderPos.x) {
+        spiderPos += glm::vec3(1.0f, 0, 0) * velocity;
+    }
+    else {
+        spiderPos -= glm::vec3(1.0f, 0, 0) * velocity;
+    }
+
+    if (camera.Position.z > spiderPos.z) {
+        spiderPos += glm::vec3(0, 0, 1.0f) * velocity;
+    }
+    else {
+        spiderPos -= glm::vec3(0, 0, 1.0f) * velocity;
+    }
+
 }
 
 // Collision detection by looking at the direction camera wants to move and check if it collides with any object.
@@ -562,6 +608,16 @@ bool checkCollision(std::vector <gameObject> objects, string direction, float di
         }
     }
     return false;
+}
+
+bool checkFinish() {
+    glm::vec3 pos = lightPos[0];
+    
+    bool collisionX = camera.Position.x + 1 >= pos.x && pos.x + 0.2f >= camera.Position.x;
+    bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 0.2f >= camera.Position.y;
+    bool collisionZ = camera.Position.z + 1 >= pos.z && pos.z + 0.2f >= camera.Position.z;
+
+    return collisionX && collisionY && collisionZ;
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -698,185 +754,13 @@ void compMap() {
             }
         }
     }
-}
 
-void computeMap() {
-    gameObject temp(glm::vec3(0.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(0.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, -1.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    int i;
-    for (i = 0; i < 20; i++) {
-        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        if (grid[XYToIndex(GRID_WIDTH - 2, y)] == ' ') {
+            lightPos.push_back(glm::vec3((GRID_WIDTH - 2) * 3, 0.5f, y * 3));
+            break;
+        }
     }
-    
-    // Left Turn
-    for (int j = 0; j < 3; j++) {
-
-        gameObject temp(glm::vec3(0.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(-2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        i++;
-    }
-
-    temp = *new gameObject(glm::vec3(0.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(-1.0f, 0.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(0.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(-1.0f, 1.0f, 0.0f + i), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    int x;
-    for (x = 0; x < 20; x++) {
-        gameObject temp(glm::vec3(2.0f + x, -1.0f, 0.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, 1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, -1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, -2.0f + i - 2.0f), 180.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, 2.0f + i - 2.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-    }
-
-    for (; x < 23; x++) {
-        gameObject temp(glm::vec3(2.0f + x, -1.0f, 0.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, 1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(2.0f + x, -1.0f, -1.0f + i - 2.0f), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-    }
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 1.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 2.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 0.0f, i - 3.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 1.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 2.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    temp = *new gameObject(glm::vec3(2.0f + x, 1.0f, i - 3.0f), 90.f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-    objects.push_back(temp);
-
-    for (; i < 40; i++) {
-        gameObject temp(glm::vec3(x + 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x + 2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x + 2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-    }
-
-    for (i = 0; i < 20; i++) {
-        gameObject temp(glm::vec3(x + 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 1.0f, -1.0f, 0.0f + i), 90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x + 2.0f, 0.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x + 2.0f, 1.0f, 0.0f + i), 90.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 2.0f, 0.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-
-        temp = *new gameObject(glm::vec3(x - 2.0f, 1.0f, 0.0f + i), 270.0f, glm::vec3(0.0f, 1.0f, 0.0f), "wall");
-        objects.push_back(temp);
-    }
-    
 }
 
 void gravity() {
@@ -1031,6 +915,7 @@ void Visit(int x, int y)
         }
     }
 }
+
 void PrintGrid()
 {
     // Displays the finished maze to the screen.
@@ -1043,3 +928,9 @@ void PrintGrid()
         cout << endl;
     }
 }
+
+void astar(int x, int y, vector <vector <int>> ind, vector <char> path) {
+    
+
+}
+
