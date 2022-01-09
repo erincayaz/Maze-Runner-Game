@@ -5,6 +5,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
+#include <stack>
+#include <set>
+#include <math.h>
 
 #include "camera.h"
 #include "entity.h"
@@ -37,6 +40,7 @@ struct gameObject {
 
 std::vector <gameObject> objects;
 std::vector <glm::vec3> lightPos;
+std::vector <glm::vec3> ghostPos;
 glm::vec3 spiderPos;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -51,7 +55,11 @@ void gravity();
 bool frustumCulling(glm::vec3 objPos, float size);
 
 bool checkFinish();
+bool checkSpiderCollision();
+bool checkGhostCollision();
 void calculatePosOfSpider();
+void calculatePosOfGhost();
+void computePath(vector <pair <int, int>> path, int x, int y, vector <pair <int, int>> & resultPath);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -77,13 +85,44 @@ float lastFrame = 0.0f;
 #define WEST 3
 //----GLOBAL VARIABLES------------------------------------------------
 char grid[GRID_WIDTH * GRID_HEIGHT];
+char grid_map[GRID_WIDTH * GRID_HEIGHT * 9];
+vector <pair <int, int>> resultPath;
 //----FUNCTION PROTOTYPES---------------------------------------------
 void ResetGrid();
 int XYToIndex(int x, int y);
+int XYToIndex3(int x, int y);
 int IsInBounds(int x, int y);
 void Visit(int x, int y);
 void PrintGrid();
 /////////////////////////////////////////////////////////////////////
+
+/// A Star Definitions ///////////////////////////////////////////////
+// Creating a shortcut for int, int pair type
+typedef pair<int, int> Pair;
+
+// Creating a shortcut for pair<int, pair<int, int>> type
+typedef pair<double, pair<int, int> > pPair;
+
+// A structure to hold the necessary parameters
+struct cell {
+    // Row and Column index of its parent
+    // Note that 0 <= i <= ROW-1 & 0 <= j <= COL-1
+    int parent_i, parent_j;
+    // f = g + h
+    double f, g, h;
+};
+
+bool isValid(int row, int col);
+bool isUnBlocked(int row, int col);
+bool isDestination(int row, int col, Pair dest);
+double calculateHValue(int row, int col, Pair dest);
+void tracePath(cell cellDetails[][GRID_WIDTH * 3], Pair dest);
+void aStarSearch(Pair src, Pair dest);
+
+stack<Pair> spiderPath;
+stack<Pair> lastPath;
+int pcX, pcY;
+//////////////////////////////////////////////////////////////////////
 
 int main()
 {
@@ -200,6 +239,12 @@ int main()
         glm::vec3(0.0f,  0.0f,  0.0f)
     };
 
+    for (int i = 0; i < 1; i++) {
+        int rX = rand() % 90 + 10, rY = rand() % 60 + 10;
+        glm::vec3 temp = glm::vec3(rX, -0.3, rY);
+        ghostPos.push_back(temp);
+    }
+
     // Maze Generation
     srand(time(0));
     ResetGrid();
@@ -211,7 +256,6 @@ int main()
 
     // Cube Pos
     glm::vec3 cubePos = glm::vec3(0.0f, -10.0f, -2.0f);
-    spiderPos = glm::vec3(3.0f, -0.3f, 3.0f);
     /////////
 
     glm::vec3 pointLightPositions[] = {
@@ -375,10 +419,20 @@ int main()
 
         model = glm::mat4(1.0f);
         model = glm::translate(model, spiderPos);
-        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+        model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
         model = glm::rotate(model, glm::radians(270.0f), glm::vec3(1.0f, 0, 0));
         lightingShader.setMat4("model", model);
         spiderModel.Draw(lightingShader);
+        
+        calculatePosOfGhost();
+        for (int i = 0; i < ghostPos.size(); i++) {
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, ghostPos[i]);
+            model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+            model = glm::rotate(model, glm::radians(270.0f), glm::vec3(1.0f, 0, 0));
+            lightingShader.setMat4("model", model);
+            spiderModel.Draw(lightingShader);
+        }
 
         // bind diffuse map
         glActiveTexture(GL_TEXTURE0);
@@ -449,9 +503,26 @@ int main()
             camera.Position = glm::vec3(2.0f, 20.0f, 2.0f);
             ResetGrid();
             Visit(1, 1);
+            PrintGrid();
             objects.clear();
             lightPos.clear();
             compMap();
+
+            for (int i = 0; i < ghostPos.size(); i++) {
+                int rX = rand() % 90 + 10, rY = rand() % 60 + 10;
+                glm::vec3 temp = glm::vec3(rX, -0.3, rY);
+                ghostPos[i] = temp;
+            }
+        }
+        if (checkSpiderCollision() || checkGhostCollision()) {
+            camera.Position = glm::vec3(3.0f, 3.0f, 3.0f);
+            spiderPos = glm::vec3(lightPos[0].x, 0, lightPos[0].z);
+
+            for (int i = 0; i < ghostPos.size(); i++) {
+                int rX = rand() % 90 + 10, rY = rand() % 60 + 10;
+                glm::vec3 temp = glm::vec3(rX, -0.3, rY);
+                ghostPos[i] = temp;
+            }
         }
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -526,22 +597,122 @@ bool frustumCulling(glm::vec3 objPos, float size) {
 }
 
 void calculatePosOfSpider() {
-    float velocity = 2.0f * deltaTime;
-    if (camera.Position.x > spiderPos.x) {
-        spiderPos += glm::vec3(1.0f, 0, 0) * velocity;
-    }
-    else {
-        spiderPos -= glm::vec3(1.0f, 0, 0) * velocity;
+    int x = (int)ceil(spiderPos.x), y = (int)ceil(spiderPos.z);
+    int cx = (int)ceil(camera.Position.x), cy = (int)ceil(camera.Position.z);
+
+    Pair src = make_pair(y, x);
+    Pair dest = make_pair(cy, cx);
+    aStarSearch(src, dest);
+
+    if (spiderPath.empty() && !lastPath.empty()) {
+        spiderPath = lastPath;
     }
 
-    if (camera.Position.z > spiderPos.z) {
-        spiderPos += glm::vec3(0, 0, 1.0f) * velocity;
+    if (!spiderPath.empty()) {
+        Pair coord = spiderPath.top();
+        if (coord.second == x && coord.first == y) {
+            spiderPath.pop();
+            coord = spiderPath.top();
+        }
+
+        float velocity = 3.0f * deltaTime;
+        if (coord.second > x) {
+            if (coord.first> y)
+                spiderPos += glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else if (coord.first < y)
+                spiderPos += glm::vec3(1.0f, 0, -1.0f) * velocity;
+            else
+                spiderPos += glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else if (coord.second < x) {
+            if (coord.first > y)
+                spiderPos += glm::vec3(-1.0f, 0, 1.0f) * velocity;
+            else if (coord.first < y)
+                spiderPos -= glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else
+                spiderPos -= glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else {
+            if (coord.first > y) {
+                spiderPos += glm::vec3(0, 0, 1.0f) * velocity;
+            }
+            else {
+                spiderPos -= glm::vec3(0, 0, 1.0f) * velocity;
+            }
+        }
     }
     else {
-        spiderPos -= glm::vec3(0, 0, 1.0f) * velocity;
+        float velocity = 3.0f * deltaTime;
+        glm::vec3 cameraPos = camera.Position;
+        float cx = cameraPos.x, cy = cameraPos.z;
+        glm::vec3 temp = spiderPos;
+        float x = temp.x, y = temp.z;
+
+        if (cx > x) {
+            if (cx > y)
+                spiderPos += glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else if (cy < y)
+                spiderPos += glm::vec3(1.0f, 0, -1.0f) * velocity;
+            else
+                spiderPos += glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else if (cx < x) {
+            if (cy > y)
+                spiderPos += glm::vec3(-1.0f, 0, 1.0f) * velocity;
+            else if (cy < y)
+                spiderPos -= glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else
+                spiderPos -= glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else {
+            if (cy > y) {
+                spiderPos += glm::vec3(0, 0, 1.0f) * velocity;
+            }
+            else {
+                spiderPos -= glm::vec3(0, 0, 1.0f) * velocity;
+            }
+        }
     }
 
 }
+
+void calculatePosOfGhost() {
+    glm::vec3 cameraPos = camera.Position;
+    float cx = cameraPos.x, cy = cameraPos.z;
+
+    for (int i = 0; i < ghostPos.size(); i++) {
+        glm::vec3 temp = ghostPos[i];
+        float x = temp.x, y = temp.z;
+        float velocity = 2.5f * deltaTime;
+
+        if (cx > x) {
+            if (cy > y)
+                ghostPos[i] += glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else if (cy < y)
+                ghostPos[i] += glm::vec3(1.0f, 0, -1.0f) * velocity;
+            else
+                ghostPos[i] += glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else if (cx < x) {
+            if (cy > y)
+                ghostPos[i] += glm::vec3(-1.0f, 0, 1.0f) * velocity;
+            else if (cy < y)
+                ghostPos[i] -= glm::vec3(1.0f, 0, 1.0f) * velocity;
+            else
+                ghostPos[i] -= glm::vec3(1.0f, 0, 0) * velocity;
+        }
+        else {
+            if (cy > y) {
+                ghostPos[i] += glm::vec3(0, 0, 1.0f) * velocity;
+            }
+            else {
+                ghostPos[i] -= glm::vec3(0, 0, 1.0f) * velocity;
+            }
+        }
+    }
+}
+
+
 
 // Collision detection by looking at the direction camera wants to move and check if it collides with any object.
 //---------------------------------------------------------------------------------------------------------------
@@ -621,6 +792,30 @@ bool checkFinish() {
     return collisionX && collisionY && collisionZ;
 }
 
+bool checkSpiderCollision() {
+    glm::vec3 pos = spiderPos;
+
+    bool collisionX = camera.Position.x + 1 >= pos.x && pos.x + 1.25f >= camera.Position.x;
+    bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 0.75f >= camera.Position.y;
+    bool collisionZ = camera.Position.z + 1 >= pos.z && pos.z + 1.25f >= camera.Position.z;
+
+    return collisionX && collisionY && collisionZ;
+}
+
+bool checkGhostCollision() {
+    for (int i = 0; i < ghostPos.size(); i++) {
+        glm::vec3 pos = ghostPos[i];
+        
+        bool collisionX = camera.Position.x + 1 >= pos.x && pos.x + 0.75f >= camera.Position.x;
+        bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 1.0f >= camera.Position.y;
+        bool collisionZ = camera.Position.z + 1 >= pos.z && pos.z + 0.75f >= camera.Position.z;
+
+        if (collisionX && collisionY && collisionZ)
+            return true;
+    }
+    return false;
+}
+
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
@@ -642,6 +837,9 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(DOWN, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS && !checkCollision(objects, "up", 1))
         camera.ProcessKeyboard(FLY, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+        spiderPos = lightPos[0];
+
 }
 
 void compMap() {
@@ -761,6 +959,7 @@ void compMap() {
     for (int y = 0; y < GRID_HEIGHT; y++) {
         if (grid[XYToIndex(GRID_WIDTH - 2, y)] == ' ') {
             lightPos.push_back(glm::vec3((GRID_WIDTH - 2) * 3, 0.5f, y * 3));
+            spiderPos = glm::vec3((GRID_WIDTH - 2) * 3, 0, y * 3);
             break;
         }
     }
@@ -861,6 +1060,22 @@ int XYToIndex(int x, int y)
     // single-dimensional index. The result is y * ROW_WIDTH + x.
     return y * GRID_WIDTH + x;
 }
+
+int XYToIndex3(int x, int y) {
+    return y * (GRID_WIDTH * 3) + x;
+}
+
+void PrintGrid3() {
+    for (int y = 0; y < GRID_HEIGHT * 3; ++y)
+    {
+        for (int x = 0; x < GRID_WIDTH * 3; ++x)
+        {
+            cout << grid_map[XYToIndex3(x, y)];
+        }
+        cout << endl;
+    }
+}
+
 int IsInBounds(int x, int y)
 {
     // Returns "true" if x and y are both in-bounds.
@@ -921,6 +1136,26 @@ void Visit(int x, int y)
 
 void PrintGrid()
 {
+    for (int i = 0; i < GRID_HEIGHT * 3; i++) {
+        for (int j = 0; j < GRID_WIDTH * 3; j++) {
+            grid_map[XYToIndex3(j, i)] = '#';
+        }
+    }
+
+    for (int i = 0; i < GRID_HEIGHT; i++) {
+        for (int j = 0; j < GRID_WIDTH; j++) {
+            if (grid[XYToIndex(j, i)] == ' ') {
+                for (int k = 0; k < 3; k++) {
+                    grid_map[XYToIndex3(j * 3, i * 3 - 1 + k)] = ' ';
+                    grid_map[XYToIndex3(j * 3 - 1, i * 3 - 1 + k)] = ' ';
+                    grid_map[XYToIndex3(j * 3 + 1, i * 3 - 1 + k)] = ' ';
+                }
+            }
+        }
+    }
+
+    PrintGrid3();
+
     // Displays the finished maze to the screen.
     for (int y = 0; y < GRID_HEIGHT; ++y)
     {
@@ -932,8 +1167,653 @@ void PrintGrid()
     }
 }
 
-void astar(int x, int y, vector <vector <int>> ind, vector <char> path) {
-    
+void computePath(vector <pair <int, int>> path, int x, int y, vector <pair <int, int>> & resultPath) {
 
+    int cx = path[path.size() - 1].first, cy = path[path.size() - 1].second;
+    if (cx == x && cy == y) {
+        resultPath = path;
+        return;
+    }
+
+    int bcx = -1, bcy = -1;
+    if (path.size() != 1) {
+        bcx = path[path.size() - 2].first; 
+        bcy = path[path.size() - 2].second;
+    }
+
+    if (cx + 1 < GRID_WIDTH && grid[XYToIndex(cx + 1, cy)] != '#' && (bcx == -1 || (bcx != -1 && !(bcx == cx + 1 && bcy == cy)))) {
+        path.push_back(make_pair(cx + 1, cy));
+        computePath(path, x, y, resultPath);
+        path.pop_back();
+    }
+    if (grid[XYToIndex(cx - 1, cy)] != '#' && (bcx == -1 || (bcx != -1 && !(bcx == cx - 1 && bcy == cy)))) {
+        path.push_back(make_pair(cx - 1, cy));
+        computePath(path, x, y, resultPath);
+        path.pop_back();
+    }
+    if (grid[XYToIndex(cx, cy + 1)] != '#' && (bcx == -1 || (bcx != -1 && !(bcx == cx && bcy == cy + 1)))) {
+        path.push_back(make_pair(cx, cy + 1));
+        computePath(path, x, y, resultPath);
+        path.pop_back();
+    }
+    if (grid[XYToIndex(cx, cy - 1)] != '#' && (bcx == -1 || (bcx != -1 && !(bcx == cx && bcy == cy - 1)))) {
+        path.push_back(make_pair(cx, cy - 1));
+        computePath(path, x, y, resultPath);
+        path.pop_back();
+    }
+    
+    return;
+}
+
+
+// astar
+
+// A Utility Function to check whether given cell (row, col)
+// is a valid cell or not.
+bool isValid(int row, int col)
+{
+    // Returns true if row number and column number
+    // is in range
+    return (row >= 0) && (row < GRID_HEIGHT * 3) && (col >= 0)
+        && (col < GRID_WIDTH * 3);
+}
+
+// A Utility Function to check whether the given cell is
+// blocked or not
+bool isUnBlocked(int row, int col)
+{
+    // Returns true if the cell is not blocked else false
+    if (grid_map[XYToIndex3(col, row)] == ' ')
+        return (true);
+    else
+        return (false);
+}
+
+// A Utility Function to check whether destination cell has
+// been reached or not
+bool isDestination(int row, int col, Pair dest)
+{
+    if (row == dest.first && col == dest.second)
+        return (true);
+    else
+        return (false);
+}
+
+// A Utility Function to calculate the 'h' heuristics.
+double calculateHValue(int row, int col, Pair dest)
+{
+    // Return using the distance formula
+    return ((double)sqrt(
+        (row - dest.first) * (row - dest.first)
+        + (col - dest.second) * (col - dest.second)));
+}
+
+// A Utility Function to trace the path from the source
+// to destination
+void tracePath(cell cellDetails[][GRID_WIDTH * 3], Pair dest)
+{
+    //printf("\nThe Path is ");
+    int row = dest.first;
+    int col = dest.second;
+
+    stack<Pair> Path;
+
+    while (!(cellDetails[row][col].parent_i == row
+        && cellDetails[row][col].parent_j == col)) {
+        Path.push(make_pair(row, col));
+        int temp_row = cellDetails[row][col].parent_i;
+        int temp_col = cellDetails[row][col].parent_j;
+        row = temp_row;
+        col = temp_col;
+    }
+
+    Path.push(make_pair(row, col));
+    spiderPath = Path;
+    lastPath = spiderPath;
+    pcX = dest.second;
+    pcY = dest.first;
+    while (!Path.empty()) {
+        pair<int, int> p = Path.top();
+        Path.pop();
+        //printf("-> (%d,%d) ", p.first, p.second);
+    }
+
+
+
+    return;
+}
+
+// A Function to find the shortest path between
+// a given source cell to a destination cell according
+// to A* Search Algorithm
+void aStarSearch(Pair src, Pair dest)
+{
+    // If the source is out of range
+    if (isValid(src.first, src.second) == false) {
+        printf("Source is invalid\n");
+        stack<Pair> Path;
+        spiderPath = Path;
+        return;
+    }
+
+    // If the destination is out of range
+    if (isValid(dest.first, dest.second) == false) {
+        printf("Destination is invalid\n");
+        stack<Pair> Path;
+        spiderPath = Path;
+        return;
+    }
+
+    // Either the source or the destination is blocked
+    if (isUnBlocked(src.first, src.second) == false
+        || isUnBlocked(dest.first, dest.second)
+        == false) {
+
+        if (isUnBlocked(dest.first, dest.second) == false) {
+            dest.first = pcY;
+            dest.second = pcX;
+        }
+        else {
+            printf("Source or the destination is blocked\n");
+            stack<Pair> Path;
+            spiderPath = Path;
+            return;
+        }
+    }
+
+    // If the destination cell is the same as source cell
+    if (isDestination(src.first, src.second, dest)
+        == true) {
+        printf("We are already at the destination\n");
+        stack<Pair> Path;
+        spiderPath = Path;
+        return;
+    }
+
+    // Create a closed list and initialise it to false which
+    // means that no cell has been included yet This closed
+    // list is implemented as a boolean 2D array
+    bool closedList[GRID_HEIGHT * 3][GRID_WIDTH * 3];
+    memset(closedList, false, sizeof(closedList));
+
+    // Declare a 2D array of structure to hold the details
+    // of that cell
+    cell cellDetails[GRID_HEIGHT * 3][GRID_WIDTH * 3];
+
+    int i, j;
+
+    for (i = 0; i < GRID_HEIGHT * 3; i++) {
+        for (j = 0; j < GRID_WIDTH * 3; j++) {
+            cellDetails[i][j].f = FLT_MAX;
+            cellDetails[i][j].g = FLT_MAX;
+            cellDetails[i][j].h = FLT_MAX;
+            cellDetails[i][j].parent_i = -1;
+            cellDetails[i][j].parent_j = -1;
+        }
+    }
+
+    // Initialising the parameters of the starting node
+    i = src.first, j = src.second;
+    cellDetails[i][j].f = 0.0;
+    cellDetails[i][j].g = 0.0;
+    cellDetails[i][j].h = 0.0;
+    cellDetails[i][j].parent_i = i;
+    cellDetails[i][j].parent_j = j;
+
+    /*
+     Create an open list having information as-
+     <f, <i, j>>
+     where f = g + h,
+     and i, j are the row and column index of that cell
+     Note that 0 <= i <= ROW-1 & 0 <= j <= COL-1
+     This open list is implemented as a set of pair of
+     pair.*/
+    set<pPair> openList;
+
+    // Put the starting cell on the open list and set its
+    // 'f' as 0
+    openList.insert(make_pair(0.0, make_pair(i, j)));
+
+    // We set this boolean value as false as initially
+    // the destination is not reached.
+    bool foundDest = false;
+
+    while (!openList.empty()) {
+        pPair p = *openList.begin();
+
+        // Remove this vertex from the open list
+        openList.erase(openList.begin());
+
+        // Add this vertex to the closed list
+        i = p.second.first;
+        j = p.second.second;
+        closedList[i][j] = true;
+
+        /*
+         Generating all the 8 successor of this cell
+
+             N.W   N   N.E
+               \   |   /
+                \  |  /
+             W----Cell----E
+                  / | \
+                /   |  \
+             S.W    S   S.E
+
+         Cell-->Popped Cell (i, j)
+         N -->  North       (i-1, j)
+         S -->  South       (i+1, j)
+         E -->  East        (i, j+1)
+         W -->  West           (i, j-1)
+         N.E--> North-East  (i-1, j+1)
+         N.W--> North-West  (i-1, j-1)
+         S.E--> South-East  (i+1, j+1)
+         S.W--> South-West  (i+1, j-1)*/
+
+         // To store the 'g', 'h' and 'f' of the 8 successors
+        double gNew, hNew, fNew;
+
+        //----------- 1st Successor (North) ------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i - 1, j) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i - 1, j, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i - 1][j].parent_i = i;
+                cellDetails[i - 1][j].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i - 1][j] == false
+                && isUnBlocked(i - 1, j)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.0;
+                hNew = calculateHValue(i - 1, j, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i - 1][j].f == FLT_MAX
+                    || cellDetails[i - 1][j].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i - 1, j)));
+
+                    // Update the details of this cell
+                    cellDetails[i - 1][j].f = fNew;
+                    cellDetails[i - 1][j].g = gNew;
+                    cellDetails[i - 1][j].h = hNew;
+                    cellDetails[i - 1][j].parent_i = i;
+                    cellDetails[i - 1][j].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 2nd Successor (South) ------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i + 1, j) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i + 1, j, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i + 1][j].parent_i = i;
+                cellDetails[i + 1][j].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i + 1][j] == false
+                && isUnBlocked(i + 1, j)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.0;
+                hNew = calculateHValue(i + 1, j, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i + 1][j].f == FLT_MAX
+                    || cellDetails[i + 1][j].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i + 1, j)));
+                    // Update the details of this cell
+                    cellDetails[i + 1][j].f = fNew;
+                    cellDetails[i + 1][j].g = gNew;
+                    cellDetails[i + 1][j].h = hNew;
+                    cellDetails[i + 1][j].parent_i = i;
+                    cellDetails[i + 1][j].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 3rd Successor (East) ------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i, j + 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i, j + 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i][j + 1].parent_i = i;
+                cellDetails[i][j + 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i][j + 1] == false
+                && isUnBlocked(i, j + 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.0;
+                hNew = calculateHValue(i, j + 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i][j + 1].f == FLT_MAX
+                    || cellDetails[i][j + 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i, j + 1)));
+
+                    // Update the details of this cell
+                    cellDetails[i][j + 1].f = fNew;
+                    cellDetails[i][j + 1].g = gNew;
+                    cellDetails[i][j + 1].h = hNew;
+                    cellDetails[i][j + 1].parent_i = i;
+                    cellDetails[i][j + 1].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 4th Successor (West) ------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i, j - 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i, j - 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i][j - 1].parent_i = i;
+                cellDetails[i][j - 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i][j - 1] == false
+                && isUnBlocked(i, j - 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.0;
+                hNew = calculateHValue(i, j - 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i][j - 1].f == FLT_MAX
+                    || cellDetails[i][j - 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i, j - 1)));
+
+                    // Update the details of this cell
+                    cellDetails[i][j - 1].f = fNew;
+                    cellDetails[i][j - 1].g = gNew;
+                    cellDetails[i][j - 1].h = hNew;
+                    cellDetails[i][j - 1].parent_i = i;
+                    cellDetails[i][j - 1].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 5th Successor (North-East)
+        //------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i - 1, j + 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i - 1, j + 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i - 1][j + 1].parent_i = i;
+                cellDetails[i - 1][j + 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i - 1][j + 1] == false
+                && isUnBlocked(i - 1, j + 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.414;
+                hNew = calculateHValue(i - 1, j + 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i - 1][j + 1].f == FLT_MAX
+                    || cellDetails[i - 1][j + 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i - 1, j + 1)));
+
+                    // Update the details of this cell
+                    cellDetails[i - 1][j + 1].f = fNew;
+                    cellDetails[i - 1][j + 1].g = gNew;
+                    cellDetails[i - 1][j + 1].h = hNew;
+                    cellDetails[i - 1][j + 1].parent_i = i;
+                    cellDetails[i - 1][j + 1].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 6th Successor (North-West)
+        //------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i - 1, j - 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i - 1, j - 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i - 1][j - 1].parent_i = i;
+                cellDetails[i - 1][j - 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i - 1][j - 1] == false
+                && isUnBlocked(i - 1, j - 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.414;
+                hNew = calculateHValue(i - 1, j - 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i - 1][j - 1].f == FLT_MAX
+                    || cellDetails[i - 1][j - 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i - 1, j - 1)));
+                    // Update the details of this cell
+                    cellDetails[i - 1][j - 1].f = fNew;
+                    cellDetails[i - 1][j - 1].g = gNew;
+                    cellDetails[i - 1][j - 1].h = hNew;
+                    cellDetails[i - 1][j - 1].parent_i = i;
+                    cellDetails[i - 1][j - 1].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 7th Successor (South-East)
+        //------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i + 1, j + 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i + 1, j + 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i + 1][j + 1].parent_i = i;
+                cellDetails[i + 1][j + 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i + 1][j + 1] == false
+                && isUnBlocked(i + 1, j + 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.414;
+                hNew = calculateHValue(i + 1, j + 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i + 1][j + 1].f == FLT_MAX
+                    || cellDetails[i + 1][j + 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i + 1, j + 1)));
+
+                    // Update the details of this cell
+                    cellDetails[i + 1][j + 1].f = fNew;
+                    cellDetails[i + 1][j + 1].g = gNew;
+                    cellDetails[i + 1][j + 1].h = hNew;
+                    cellDetails[i + 1][j + 1].parent_i = i;
+                    cellDetails[i + 1][j + 1].parent_j = j;
+                }
+            }
+        }
+
+        //----------- 8th Successor (South-West)
+        //------------
+
+        // Only process this cell if this is a valid one
+        if (isValid(i + 1, j - 1) == true) {
+            // If the destination cell is the same as the
+            // current successor
+            if (isDestination(i + 1, j - 1, dest) == true) {
+                // Set the Parent of the destination cell
+                cellDetails[i + 1][j - 1].parent_i = i;
+                cellDetails[i + 1][j - 1].parent_j = j;
+                printf("The destination cell is found\n");
+                tracePath(cellDetails, dest);
+                foundDest = true;
+                return;
+            }
+
+            // If the successor is already on the closed
+            // list or if it is blocked, then ignore it.
+            // Else do the following
+            else if (closedList[i + 1][j - 1] == false
+                && isUnBlocked(i + 1, j - 1)
+                == true) {
+                gNew = cellDetails[i][j].g + 1.414;
+                hNew = calculateHValue(i + 1, j - 1, dest);
+                fNew = gNew + hNew;
+
+                // If it isnt on the open list, add it to
+                // the open list. Make the current square
+                // the parent of this square. Record the
+                // f, g, and h costs of the square cell
+                //                OR
+                // If it is on the open list already, check
+                // to see if this path to that square is
+                // better, using 'f' cost as the measure.
+                if (cellDetails[i + 1][j - 1].f == FLT_MAX
+                    || cellDetails[i + 1][j - 1].f > fNew) {
+                    openList.insert(make_pair(
+                        fNew, make_pair(i + 1, j - 1)));
+
+                    // Update the details of this cell
+                    cellDetails[i + 1][j - 1].f = fNew;
+                    cellDetails[i + 1][j - 1].g = gNew;
+                    cellDetails[i + 1][j - 1].h = hNew;
+                    cellDetails[i + 1][j - 1].parent_i = i;
+                    cellDetails[i + 1][j - 1].parent_j = j;
+                }
+            }
+        }
+    }
+
+    // When the destination cell is not found and the open
+    // list is empty, then we conclude that we failed to
+    // reach the destination cell. This may happen when the
+    // there is no way to destination cell (due to
+    // blockages)
+    if (foundDest == false)
+        printf("Failed to find the Destination Cell\n");
+
+    return;
 }
 
