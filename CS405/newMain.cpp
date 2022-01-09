@@ -1,3 +1,12 @@
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <windows.h>
+#include <mmsystem.h>
+#include <mciapi.h>
+//these two headers are already included in the <Windows.h> header
+#pragma comment(lib, "Winmm.lib")
+#include <chrono>
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -66,7 +75,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(2.0f, 10.0f, 2.0f));
+Camera camera(glm::vec3(2.0f, 15.0f, 2.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -112,12 +121,21 @@ struct cell {
     double f, g, h;
 };
 
+struct Character {
+    unsigned int TextureID; // ID handle of the glyph texture
+    glm::ivec2   Size;      // Size of glyph
+    glm::ivec2   Bearing;   // Offset from baseline to left/top of glyph
+    unsigned int Advance;   // Horizontal offset to advance to next glyph
+};
+std::map<GLchar, Character> Characters;
+
 bool isValid(int row, int col);
 bool isUnBlocked(int row, int col);
 bool isDestination(int row, int col, Pair dest);
 double calculateHValue(int row, int col, Pair dest);
 void tracePath(cell cellDetails[][GRID_WIDTH * 3], Pair dest);
 void aStarSearch(Pair src, Pair dest);
+void RenderText(Shader& shader, std::string text, float x, float y, float scale, glm::vec3 color, unsigned int VBO, unsigned int VAO);
 
 stack<Pair> spiderPath;
 stack<Pair> lastPath;
@@ -167,12 +185,19 @@ int main()
     // configure global opengl state
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // build and compile our shader zprogram
     // ------------------------------------
     Shader lightingShader("colors.vert", "colors.frag");
     Shader lightCubeShader("light_cube.vert", "light_cube.frag");
     Shader ourShader("vertex.vert", "frag.frag");
+
+    Shader textShader("text.vert", "text.frag");
+    glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(SCR_WIDTH), 0.0f, static_cast<float>(SCR_HEIGHT));
+    textShader.use();
+    glUniformMatrix4fv(glGetUniformLocation(textShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
     // Load Shader
     Model ourModel("backpack.obj");
@@ -265,6 +290,81 @@ int main()
         glm::vec3(0.0f,  5.0f, -3.0f)
     };
 
+    // FreeType
+    // --------
+    FT_Library ft;
+    // All functions return a value different than 0 whenever an error occurred
+    if (FT_Init_FreeType(&ft))
+    {
+        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        return -1;
+    }
+
+    // find path to font
+    std::string font_name("arial.ttf");
+    if (font_name.empty())
+    {
+        std::cout << "ERROR::FREETYPE: Failed to load font_name" << std::endl;
+        return -1;
+    }
+
+    // load font as face
+    FT_Face face;
+    if (FT_New_Face(ft, font_name.c_str(), 0, &face)) {
+        std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
+        return -1;
+    }
+    else {
+        // set size to load glyphs as
+        FT_Set_Pixel_Sizes(face, 0, 48);
+
+        // disable byte-alignment restriction
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        // load first 128 characters of ASCII set
+        for (unsigned char c = 0; c < 128; c++)
+        {
+            // Load character glyph 
+            if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+            {
+                std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+                continue;
+            }
+            // generate texture
+            unsigned int texture;
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RED,
+                face->glyph->bitmap.width,
+                face->glyph->bitmap.rows,
+                0,
+                GL_RED,
+                GL_UNSIGNED_BYTE,
+                face->glyph->bitmap.buffer
+            );
+            // set texture options
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            // now store character for later use
+            Character character = {
+                texture,
+                glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+                glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+                static_cast<unsigned int>(face->glyph->advance.x)
+            };
+            Characters.insert(std::pair<char, Character>(c, character));
+        }
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    // destroy FreeType once we're finished
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
+
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
     glGenVertexArrays(1, &cubeVAO);
@@ -297,6 +397,18 @@ int main()
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    //text VAO
+    unsigned int textVAO, textVBO;
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
     // second, configure the light's VAO (VBO stays the same; the vertices are the same for the light object which is also a 3D cube)
     unsigned int lightCubeVAO;
     glGenVertexArrays(1, &lightCubeVAO);
@@ -321,10 +433,19 @@ int main()
     lightingShader.setInt("material.diffuse", 0);
     lightingShader.setInt("material.specular", 1);
 
+    PlaySound(L"song.wav", NULL, SND_ASYNC);
+    std::chrono::duration<double> diff;
+    double a = 0;
+    int b = 0;
+    string s;
+
+    string endText = "";
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+        auto start = std::chrono::system_clock::now();
 
         // Debug
 
@@ -343,6 +464,18 @@ int main()
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (a == 1000)
+        {
+            RenderText(textShader, "You're done :)", 540.0f, 570.0f, 0.5f, glm::vec3(0.3, 0.7f, 0.9f), textVBO, textVAO);
+
+        }
+        else
+        {
+            s = to_string(a);
+            RenderText(textShader, s, 540.0f, 570.0f, 0.5f, glm::vec3(0.3, 0.7f, 0.9f), textVBO, textVAO);
+            //a += 1;
+        }
 
         // be sure to activate shader when setting uniforms/drawing objects
         lightingShader.use();
@@ -408,11 +541,11 @@ int main()
         glm::mat4 model = glm::mat4(1.0f);
         lightingShader.setMat4("model", model);
 
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 10.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));	// it's a bit too big for our scene, so scale it down
-        lightingShader.setMat4("model", model);
-        ourModel.Draw(lightingShader);
+        //model = glm::mat4(1.0f);
+        //model = glm::translate(model, glm::vec3(0.0f, 10.0f, 0.0f)); // translate it down so it's at the center of the scene
+        //model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));	// it's a bit too big for our scene, so scale it down
+        //lightingShader.setMat4("model", model);
+        //ourModel.Draw(lightingShader);
 
         // render spider
         calculatePosOfSpider();
@@ -499,7 +632,15 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
+        if (a <= 3.0f) {
+            RenderText(textShader, endText, 100.0f, 100.0f, 2.0f, glm::vec3(0.3, 0.7f, 0.9f), textVBO, textVAO);
+        }
+
         if (checkFinish()) {
+            a = 0;
+
+            endText = "Helal olsun";
+
             camera.Position = glm::vec3(2.0f, 20.0f, 2.0f);
             ResetGrid();
             Visit(1, 1);
@@ -515,6 +656,9 @@ int main()
             }
         }
         if (checkSpiderCollision() || checkGhostCollision()) {
+            endText = "You are ded";
+            a = 0;
+
             camera.Position = glm::vec3(3.0f, 3.0f, 3.0f);
             spiderPos = glm::vec3(lightPos[0].x, 0, lightPos[0].z);
 
@@ -524,6 +668,10 @@ int main()
                 ghostPos[i] = temp;
             }
         }
+
+        auto end = std::chrono::system_clock::now();
+        diff = end - start;
+        a += diff.count();
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -676,6 +824,53 @@ void calculatePosOfSpider() {
 
 }
 
+// render line of text
+// -------------------
+void RenderText(Shader& shader, std::string text, float x, float y, float scale, glm::vec3 color, unsigned int VBO, unsigned int VAO)
+{
+    // activate corresponding render state    
+    shader.use();
+    glUniform3f(glGetUniformLocation(shader.ID, "textColor"), color.x, color.y, color.z);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(VAO);
+
+    // iterate through all characters
+    std::string::const_iterator c;
+    for (c = text.begin(); c != text.end(); c++)
+    {
+        Character ch = Characters[*c];
+
+        float xpos = x + ch.Bearing.x * scale;
+        float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+        float w = ch.Size.x * scale;
+        float h = ch.Size.y * scale;
+        // update VBO for each character
+        float vertices[6][4] = {
+            { xpos,     ypos + h,   0.0f, 0.0f },
+            { xpos,     ypos,       0.0f, 1.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
+
+            { xpos,     ypos + h,   0.0f, 0.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
+            { xpos + w, ypos + h,   1.0f, 0.0f }
+        };
+        // render glyph texture over quad
+        glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+        // update content of VBO memory
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // render quad
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
+        x += (ch.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void calculatePosOfGhost() {
     glm::vec3 cameraPos = camera.Position;
     float cx = cameraPos.x, cy = cameraPos.z;
@@ -796,7 +991,7 @@ bool checkSpiderCollision() {
     glm::vec3 pos = spiderPos;
 
     bool collisionX = camera.Position.x + 1 >= pos.x && pos.x + 1.25f >= camera.Position.x;
-    bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 0.75f >= camera.Position.y;
+    bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 0.5f >= camera.Position.y;
     bool collisionZ = camera.Position.z + 1 >= pos.z && pos.z + 1.25f >= camera.Position.z;
 
     return collisionX && collisionY && collisionZ;
@@ -807,7 +1002,7 @@ bool checkGhostCollision() {
         glm::vec3 pos = ghostPos[i];
         
         bool collisionX = camera.Position.x + 1 >= pos.x && pos.x + 0.75f >= camera.Position.x;
-        bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 1.0f >= camera.Position.y;
+        bool collisionY = camera.Position.y + 1 >= pos.y && pos.y + 0.75f >= camera.Position.y;
         bool collisionZ = camera.Position.z + 1 >= pos.z && pos.z + 0.75f >= camera.Position.z;
 
         if (collisionX && collisionY && collisionZ)
