@@ -21,9 +21,13 @@
   <ItemGroup>
     <None Include="colors.frag" />
     <None Include="colors.vert" />
+    <None Include="debug_quad.vert" />
+    <None Include="debug_quad_depth.frag" />
     <None Include="frag.frag" />
     <None Include="light_cube.frag" />
     <None Include="light_cube.vert" />
+    <None Include="simple_shadow_depht.frag" />
+    <None Include="simple_shadow_depht.vert" />
     <None Include="text.frag" />
     <None Include="text.vert" />
     <None Include="vertex.vert" />

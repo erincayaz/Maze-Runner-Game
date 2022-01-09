@@ -31,6 +31,10 @@
     </None>
     <None Include="text.frag" />
     <None Include="text.vert" />
+    <None Include="debug_quad.vert" />
+    <None Include="debug_quad_depth.frag" />
+    <None Include="simple_shadow_depht.frag" />
+    <None Include="simple_shadow_depht.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c">
