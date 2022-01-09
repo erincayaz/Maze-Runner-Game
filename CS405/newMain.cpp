@@ -51,6 +51,9 @@ unsigned int loadTexture(const char* path);
 void computeMap();
 void compMap();
 void gravity();
+
+bool frustumCulling(glm::vec3 objPos, float size);
+
 bool checkFinish();
 bool checkSpiderCollision();
 bool checkGhostCollision();
@@ -475,7 +478,10 @@ int main()
             model = glm::translate(model, objects[i].pos);
             model = glm::rotate(model, glm::radians(objects[i].rotation), objects[i].rotAxis);
             lightingShader.setMat4("model", model);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            if (frustumCulling(objects[i].pos, objects[i].size.x)) {
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+            
         }
 
         lightCubeShader.use();
@@ -537,6 +543,57 @@ int main()
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
+}
+
+// area calculation of a triangle
+float area(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+    return abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
+}
+
+/* A function to check whether point P(x, y) lies inside the triangle formed
+   by A(x1, y1), B(x2, y2) and C(x3, y3) */
+bool isInside(int x1, int y1, int x2, int y2, int x3, int y3, int x, int y)
+{
+    /* Calculate area of triangle ABC */
+    float A = area(x1, y1, x2, y2, x3, y3);
+
+    /* Calculate area of triangle PBC */
+    float A1 = area(x, y, x2, y2, x3, y3);
+
+    /* Calculate area of triangle PAC */
+    float A2 = area(x1, y1, x, y, x3, y3);
+
+    /* Calculate area of triangle PAB */
+    float A3 = area(x1, y1, x2, y2, x, y);
+
+    /* Check if sum of A1, A2 and A3 is same as A */
+    return (A == A1 + A2 + A3);
+}
+
+// Frustum colling by looking forward the camera and checking the distances of objects to camera.
+//-----------------------------------------------------------------------------------------------
+
+bool frustumCulling(glm::vec3 objPos, float size) {
+    /*printf(std::to_string(camera.Front.x) + "y: " + std::to_string(camera.Front.y) + "z: " + std::to_string(camera.Front.z));*/
+
+    float left_right_distance = 40.0f;
+    float front_distance = 50.0f;
+
+    glm::vec3 frustumPlanePos = camera.Position + camera.Front * front_distance;
+
+    glm::vec3 point1Pos = frustumPlanePos - camera.Right * left_right_distance;
+    glm::vec3 point2Pos = frustumPlanePos + camera.Right * left_right_distance;
+
+    if (isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x, objPos.z) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z + size) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z - size) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z - size) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z + size)) {
+        return true;
+    }
+
+    return false;
 }
 
 void calculatePosOfSpider() {
@@ -616,6 +673,7 @@ void calculatePosOfSpider() {
             }
         }
     }
+
 }
 
 void calculatePosOfGhost() {
@@ -773,12 +831,15 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
         camera.ProcessKeyboard(RIGHT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1) && checkCollision(objects, "down", 1))
         camera.ProcessKeyboard(UP, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !checkCollision(objects, "down", 1))
         camera.ProcessKeyboard(DOWN, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+        camera.ProcessKeyboard(FLY, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
         spiderPos = lightPos[0];
+
 }
 
 void compMap() {
@@ -906,7 +967,7 @@ void compMap() {
 
 void gravity() {
     if(!checkCollision(objects, "front", 1) && !checkCollision(objects, "back", 1) && !checkCollision(objects, "down", 1))
-        camera.Position -= glm::vec3(0.0f, 1.0f, 0.0f) * deltaTime;
+        camera.Position -= glm::vec3(0.0f, 2.0f, 0.0f) * deltaTime;
 }
 
 
@@ -1377,7 +1438,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i - 1, j, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1425,7 +1486,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i + 1, j, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1473,7 +1534,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i, j + 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1522,7 +1583,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i, j - 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1572,7 +1633,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i - 1, j + 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1622,7 +1683,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i - 1, j - 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1671,7 +1732,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i + 1, j + 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
@@ -1721,7 +1782,7 @@ void aStarSearch(Pair src, Pair dest)
                 hNew = calculateHValue(i + 1, j - 1, dest);
                 fNew = gNew + hNew;
 
-                // If it isn’t on the open list, add it to
+                // If it isnÂ’t on the open list, add it to
                 // the open list. Make the current square
                 // the parent of this square. Record the
                 // f, g, and h costs of the square cell
