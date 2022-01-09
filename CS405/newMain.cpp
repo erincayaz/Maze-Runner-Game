@@ -514,15 +514,16 @@ bool frustumCulling(glm::vec3 objPos, float size) {
     glm::vec3 point1Pos = frustumPlanePos - camera.Right * left_right_distance;
     glm::vec3 point2Pos = frustumPlanePos + camera.Right * left_right_distance;
 
-    if (isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x, objPos.z) || 
-        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z + size) || 
-        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z - size) || 
-        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z - size) || 
+    if (isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x, objPos.z) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z + size) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z - size) ||
+        isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x + size, objPos.z - size) ||
         isInside(camera.Position.x, camera.Position.z, point1Pos.x, point1Pos.z, point2Pos.x, point2Pos.z, objPos.x - size, objPos.z + size)) {
         return true;
     }
 
     return false;
+}
 
 void calculatePosOfSpider() {
     float velocity = 2.0f * deltaTime;
@@ -635,10 +636,12 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS && !checkCollision(objects, "right", 0.25))
         camera.ProcessKeyboard(RIGHT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !checkCollision(objects, "up", 1) && checkCollision(objects, "down", 1))
         camera.ProcessKeyboard(UP, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !checkCollision(objects, "down", 1))
         camera.ProcessKeyboard(DOWN, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS && !checkCollision(objects, "up", 1))
+        camera.ProcessKeyboard(FLY, deltaTime);
 }
 
 void compMap() {
@@ -765,7 +768,7 @@ void compMap() {
 
 void gravity() {
     if(!checkCollision(objects, "front", 1) && !checkCollision(objects, "back", 1) && !checkCollision(objects, "down", 1))
-        camera.Position -= glm::vec3(0.0f, 1.0f, 0.0f) * deltaTime;
+        camera.Position -= glm::vec3(0.0f, 2.0f, 0.0f) * deltaTime;
 }
 
 
