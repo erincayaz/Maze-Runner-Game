@@ -108,9 +108,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
-    <ExternalIncludePath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\lib;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\erinc\source\repos\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\alpas\Documents\Visual Studio 2022\codes\CS405\CS405\Libraries\include;$(IncludePath)</IncludePath>
+    <ExternalIncludePath>C:\Users\alpas\Documents\Visual Studio 2022\codes\CS405\CS405\Libraries\lib;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>C:\Users\alpas\Documents\Visual Studio 2022\codes\CS405\CS405\Libraries\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\erinc\Desktop\Her Şey\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\alpas\Documents\GLM;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

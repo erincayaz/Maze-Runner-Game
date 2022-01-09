@@ -712,8 +712,6 @@ void calculatePosOfGhost() {
     }
 }
 
-
-
 // Collision detection by looking at the direction camera wants to move and check if it collides with any object.
 //---------------------------------------------------------------------------------------------------------------
 bool checkCollision(std::vector <gameObject> objects, string direction, float distance) {
@@ -1054,6 +1052,7 @@ void ResetGrid()
         grid[i] = '#';
     }
 }
+
 int XYToIndex(int x, int y)
 {
     // Converts the two-dimensional index pair (x,y) into a
@@ -1083,6 +1082,7 @@ int IsInBounds(int x, int y)
     if (y < 0 || y >= GRID_HEIGHT) return false;
     return true;
 }
+
 // This is the recursive function we will code in the next project
 void Visit(int x, int y)
 {
@@ -1816,4 +1816,3 @@ void aStarSearch(Pair src, Pair dest)
 
     return;
 }
-
